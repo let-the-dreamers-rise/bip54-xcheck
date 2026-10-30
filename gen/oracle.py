@@ -157,10 +157,38 @@ def check_vectors(vdir: Path) -> int:
 
 
 
+REGTEST_GENESIS_TIME = 1296688602
+
+
+def header_times(blocks: list[str]) -> list[int]:
+    return [struct.unpack("<I", bytes.fromhex(b[136:144]))[0] for b in blocks]
+
+
+def timestamps_verdict(times: list[int], first: int, interval: int = 2016) -> bool:
+    """MTP plus BIP-54's two timestamp rules for every height >= first."""
+    for n in range(first, len(times)):
+        window = times[max(0, n - 11):n]
+        if times[n] <= sorted(window)[len(window) // 2]:
+            return False
+        if n % interval == 0 and times[n] < times[n - 1] - 7200:
+            return False
+        if n % interval == interval - 1 and times[n] < times[n - interval + 1]:
+            return False
+    return True
+
+
 def check_cases(path: Path) -> int:
     """The generated cases' expected verdicts must agree with this oracle."""
     bad = 0
-    for c in json.loads(path.read_text())["cases"]:
+    doc = json.loads(path.read_text())
+    for c in doc["cases"]:
+        if c["group"] == "timestamps":
+            base = [REGTEST_GENESIS_TIME] + header_times(doc["bases"][c["base"]])
+            ok = timestamps_verdict(base + header_times(c["blocks"]), len(base))
+            if ok != (c["expect"]["verdict"] == "valid"):
+                bad += 1
+                print("case MISMATCH:", c["id"], c["desc"])
+            continue
         p = c.get("btclib")
         if not p or p["rule"] == "coinbase":
             continue

@@ -24,6 +24,10 @@ from btc import (
 CMS, CS = OP_CHECKMULTISIG, OP_CHECKSIG
 BIP54_BIT = 3  # Core PR #35793 regtest deployment bit
 VBITS_VERSION = 0x20000000 | (1 << BIP54_BIT)
+# Block 1 is dated Nov 2023. The regtest genesis is from 2011, before the
+# BIP-16 switch time btcd still keys P2SH on (1 Apr 2012); Core enforces P2SH
+# on regtest regardless, so 2011 timestamps would test that, not BIP-54.
+BASE_TIME = 1_700_000_000
 
 
 def dead(body: bytes) -> bytes:
@@ -113,7 +117,7 @@ FUND_VALUE = 1000
 def build_base_always() -> tuple[Chain, dict]:
     c = Chain(tag=b"base")
     outs = [TxOut(FUND_VALUE, spk) for spk in FUND.values()]
-    blk = c.mine(cb=c.coinbase(1, outs=outs))
+    blk = c.mine(cb=c.coinbase(1, outs=outs), time=BASE_TIME)
     cb = blk.txs[0]
     utxo = {name: (cb.txid(), i, TxOut(FUND_VALUE, spk)) for i, (name, spk) in enumerate(FUND.items())}
     while c.height < 110:
@@ -124,7 +128,7 @@ def build_base_always() -> tuple[Chain, dict]:
 def build_base_vbits(signal: bool) -> tuple[Chain, dict]:
     c = Chain(tag=b"vb1" if signal else b"vb0",
               version=VBITS_VERSION if signal else 0x20000000)
-    blk = c.mine(cb=c.coinbase(1, outs=[TxOut(FUND_VALUE, bytes([OP_TRUE]))]))
+    blk = c.mine(cb=c.coinbase(1, outs=[TxOut(FUND_VALUE, bytes([OP_TRUE]))]), time=BASE_TIME)
     utxo = {"true0": (blk.txs[0].txid(), 0, TxOut(FUND_VALUE, bytes([OP_TRUE])))}
     while c.height < 430:
         c.mine()
@@ -292,27 +296,41 @@ def timestamp_cases(base: Chain) -> None:
     case("W03", "timestamps", "always", "non-boundary block 2017 = prev - 7201 (rule must not apply)",
          "valid", None, c)
 
-    # Murch-Zawy: block 2016 set far ahead, period runs at normal pace, last
-    # block 4031 compared with 2016.
+    # Murch-Zawy over the BIP's 2016-block period [2016, 4031]. Blocks crawl
+    # up by 1 s so MTP stays low; block 2016 (and 2159) spike to X. Core's
+    # regtest applies the timestamp rules every 144 blocks instead (its
+    # difficulty interval), so every 144-block sub-period is kept valid too:
+    # only the BIP's 2016-period comparison of 4031 against 2016 can differ.
     def murch(cid, last_delta, stop=4031):
         c = base.copy(cid)
         to(c, 2016)
-        c.mine(time=REGTEST_GENESIS_TIME + 600 * 4031 + 50000)  # 2016
-        t2016 = c.times[-1]
-        while c.height < 4029:
-            c.mine(time=max(REGTEST_GENESIS_TIME + 600 * (c.height + 1), c.mtp() + 1))
-        if stop == 4030:
-            c.mine(time=t2016 - 1)  # 4030
-            return c
-        c.mine()  # 4030
-        c.mine(time=t2016 + last_delta)  # 4031
+        crawl = c.times[-1] + 1
+        x = crawl + 7000
+        c.mine(time=x)  # 2016
+        while c.height < stop - 1:
+            h = c.height + 1
+            c.mine(time=x if h == 2159 else crawl + (h - 2017))
+        c.mine(time=x + last_delta)  # stop (4030 or 4031)
         return c
 
-    case("W04", "timestamps", "always", "last block of period = first block", "valid", None, murch("W04", 0))
-    case("W05", "timestamps", "always", "last block of period = first block - 1", "invalid",
+    case("W04", "timestamps", "always", "last block of period (4031) = first block (2016)", "valid", None,
+         murch("W04", 0))
+    case("W05", "timestamps", "always", "last block of period (4031) = first block (2016) - 1", "invalid",
          "time-negative-interval", murch("W05", -1))
     case("W06", "timestamps", "always", "block 4030 < first block of period (rule must not apply)",
-         "valid", None, murch("W06", 0, stop=4030))
+         "valid", None, murch("W06", -1, stop=4030))
+
+    # The same rule at Core's regtest interval: period [288, 431]. Under the
+    # BIP text (N % 2016) heights 288/431 are not boundaries, so it is valid.
+    c = base.copy("W07")
+    to(c, 288)
+    crawl = c.times[-1] + 1
+    c.mine(time=crawl + 1000)  # 288
+    while c.height < 430:
+        c.mine(time=crawl + (c.height + 1 - 289))
+    c.mine(time=crawl + 999)  # 431 = t288 - 1
+    case("W07", "timestamps", "always",
+         "block 431 = block 288 - 1 (a period boundary only with a 144-block interval)", "valid", None, c)
 
 
 def activation_cases(base_sig: Chain, utxo_sig: dict, base_nosig: Chain, utxo_nosig: dict) -> None:

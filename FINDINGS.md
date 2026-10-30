@@ -18,7 +18,7 @@ reproduced by the harness in this repo's workflow.
   `nSequence`) but whose scriptSig does not start with the BIP-34 height push is accepted by
   btcd and rejected by Core. If both shipped as written, a miner could split btcd nodes off
   the network with one block.
-- **Cases:** C07 (height push is h+1), C08 (no height push). Source: confirmed. CI: pending.
+- **Cases:** C07 (height push is h+1), C08 (no height push). Source: confirmed. **CI: reproduced** (first run, 30 Oct 2026): Core rejects both with `bad-cb-height`, btcd accepts both.
 - **Why the existing vectors miss it:** BIP-54's `coinbases.json` chains are short mainnet
   chains, below mainnet's BIP-34 height (227,931), so BIP-34 never applies to them. btcd's
   own test uses those vectors on mainnet parameters.
@@ -37,6 +37,18 @@ reproduced by the harness in this repo's workflow.
   enforce BIP-54's timewarp and Murch-Zawy header rules at all.
 - Not a consensus bug in btcd itself. It is an ecosystem follow-up that should be on the
   BIP-54 deployment checklist. Source: confirmed.
+
+## F3. On regtest, Core and btcd apply the timestamp rules at different heights (informational)
+
+- The BIP text says `N % 2016`. Core applies the rules at its network's
+  `DifficultyAdjustmentInterval()`, which is 144 on regtest (`nPowTargetTimespan` of one
+  day). btcd hard-codes 2016, as the BIP says.
+- On mainnet, testnet4 and signet the interval is 2016, so the two agree there. On
+  regtest they disagree: cases W05 and W07 show both directions.
+- Why it matters: it is not a mainnet bug, but anyone writing BIP-54 regtest tests for one
+  implementation and running them against another will get different answers. The BIP
+  could say "the difficulty adjustment interval (2016 on mainnet)", or Core's functional
+  tests could note it.
 
 ## Checked and found consistent (source)
 

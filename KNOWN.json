@@ -1,1 +1,6 @@
-{}
+{
+  "btcd:C07": "F1: btcd #2537 skips the BIP-34 height check once BIP-54 is active; Core keeps it (bad-cb-height). Consensus divergence. See FINDINGS.md.",
+  "btcd:C08": "F1: same as C07, with no height push at all.",
+  "core:W05": "F3 (regtest only): Core applies the BIP-54 timestamp rules every DifficultyAdjustmentInterval blocks, which is 144 on regtest; the BIP text says N % 2016. Identical on mainnet, testnet4 and signet.",
+  "core:W07": "F3 (regtest only): the mirror of W05, at Core's 144-block regtest boundary 431."
+}

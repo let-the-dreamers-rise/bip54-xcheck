@@ -14,7 +14,7 @@ every implementation, then diffs the verdicts.
 | btcd | [PR #2537](https://github.com/btcsuite/btcd/pull/2537) @ `374cbaf9` | `BlockChain.ProcessBlock` on a fresh chain per case |
 | btclib | `main` @ `686f6255` (BIP-54 predicates, PR #2830) | `assert_bip54_*` on each case's final transaction |
 
-## What is tested (52 cases)
+## What is tested (53 cases)
 
 - **sigops (26):** the 2,500 limit across scriptSig, spent scriptPubKey and P2SH redeem
   script; multi-input totals; BIP-16 accurate counting (`OP_1`..`OP_16` before
@@ -25,7 +25,7 @@ every implementation, then diffs the verdicts.
   with BIP-34 (which BIP-54 does not remove).
 - **64-byte transactions (7):** 63/64/65 bytes, segwit transactions whose
   *stripped* size is 64, and a 64-byte coinbase.
-- **timestamps (6):** timewarp at a period's first block (±1 s around 7,200 s),
+- **timestamps (7):** timewarp at a period's first block (±1 s around 7,200 s),
   Murch-Zawy at a period's last block (±1 s), and neighbouring blocks where the rules
   must *not* apply. Chains are up to 4,031 blocks and keep median-time-past low so that
   only BIP-54 can reject.
