@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+cases.json
+results/
+report/
+out/

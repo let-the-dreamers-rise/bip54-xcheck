@@ -1,0 +1,107 @@
+name: xcheck
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"  # weekly, to catch new pushes to the pinned PRs' successors
+
+env:
+  # Implementations under test, pinned. Bump deliberately and record in RESULTS.md.
+  CORE_REF: 3f0f142b1d0d08a18152d6b100e12d1abf09d58e     # bitcoin/bitcoin PR #35793 (darosior)
+  BTCD_REF: 374cbaf9ecef0ebcc0a0fa0bc2f07a03159eed74     # btcsuite/btcd PR #2537 (kcalvinalvin)
+  BTCLIB_REF: 686f625565f067011cd6c7b3ff27286b45ad0cc2   # btclib-org/btclib main (BIP54 predicates, PR #2830)
+  BIPS_REF: 5aadddb511a5dcfe4599531bd8ae5e5b96d0f793     # bitcoin/bips, for the BIP-54 vectors
+
+jobs:
+  cases:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: bitcoin/bips, ref: "${{ env.BIPS_REF }}", path: bips }
+      - run: python3 gen/cases.py cases.json
+      - name: Oracle agrees with the BIP-54 vectors and with every generated case
+        run: python3 gen/oracle.py bips/bip-0054/test_vectors cases.json
+      - uses: actions/upload-artifact@v4
+        with: { name: cases, path: cases.json }
+
+  core:
+    needs: cases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: cases }
+      - name: Fetch Core PR #35793
+        run: |
+          git init -q core && cd core
+          git fetch -q --depth 1 https://github.com/bitcoin/bitcoin.git "$CORE_REF"
+          git checkout -q FETCH_HEAD
+      - uses: actions/cache@v4
+        with: { path: ~/.cache/ccache, key: "ccache-${{ env.CORE_REF }}", restore-keys: ccache- }
+      - run: sudo apt-get update -q && sudo apt-get install -y -q build-essential cmake pkgconf ccache libevent-dev libboost-dev
+      - name: Build bitcoind
+        run: |
+          cd core
+          cmake -B build -DBUILD_GUI=OFF -DENABLE_WALLET=OFF -DBUILD_TESTS=OFF -DBUILD_BENCH=OFF \
+            -DENABLE_IPC=OFF -DWITH_ZMQ=OFF -DBUILD_UTIL=OFF -DBUILD_TX=OFF -DBUILD_WALLET_TOOL=OFF \
+            -DBUILD_CLI=OFF -DBUILD_FUZZ_BINARY=OFF -DWITH_CCACHE=ON
+          cmake --build build -j "$(nproc)" --target bitcoind
+      - run: python3 runners/core.py core/build/bin/bitcoind cases.json core.json
+      - uses: actions/upload-artifact@v4
+        with: { name: core, path: core.json }
+
+  btcd:
+    needs: cases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: cases }
+      - name: Fetch btcd PR #2537
+        run: |
+          git init -q btcd && cd btcd
+          git fetch -q --depth 1 https://github.com/btcsuite/btcd.git "$BTCD_REF"
+          git checkout -q FETCH_HEAD
+      - uses: actions/setup-go@v5
+        with: { go-version-file: btcd/go.mod }
+      - name: Run btcd's own BIP-54 tests (sanity)
+        run: cd btcd && go test -count=1 -run 'BIP54' ./blockchain/
+      - name: Replay the cases
+        run: |
+          cp runners/btcd/xcheck_test.go btcd/blockchain/
+          cd btcd && XCHECK_CASES="$GITHUB_WORKSPACE/cases.json" XCHECK_OUT="$GITHUB_WORKSPACE/btcd.json" \
+            go test -count=1 -timeout 60m -run '^TestXcheck$' ./blockchain/
+      - uses: actions/upload-artifact@v4
+        with: { name: btcd, path: btcd.json }
+
+  btclib:
+    needs: cases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: cases }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -q "git+https://github.com/btclib-org/btclib.git@${BTCLIB_REF}"
+      - run: python3 runners/btclib_run.py cases.json btclib.json
+      - uses: actions/upload-artifact@v4
+        with: { name: btclib, path: btclib.json }
+
+  report:
+    needs: [core, btcd, btclib]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: results, merge-multiple: true }
+      - run: python3 compare.py results/cases.json results report
+      - run: cat report/RESULTS.md >> "$GITHUB_STEP_SUMMARY"
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: report, path: report }
