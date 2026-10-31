@@ -12,8 +12,9 @@ reproduced by the harness in this repo's workflow.
   under `DEPLOYMENT_HEIGHTINCB` regardless of BIP-54, then adds `bad-cb-locktime` /
   `bad-cb-sequence`.
 - **BIP-54 text:** says BIP-30 validation can be skipped after activation "regardless of the
-  BIP-34 activation status". It does not relax BIP-34. The btcd PR description says the
-  omission of BIP-34 from the BIP is believed to be accidental.
+  BIP-34 activation status". It does not relax BIP-34, and its Backward compatibility section says the proposal "only
+  tightens the block validation rules". The btcd PR description says the omission of BIP-34
+  from the BIP is believed to be accidental.
 - **Effect:** a block whose coinbase satisfies BIP-54 (`nLockTime = h-1`, non-final
   `nSequence`) but whose scriptSig does not start with the BIP-34 height push is accepted by
   btcd and rejected by Core. If both shipped as written, a miner could split btcd nodes off
