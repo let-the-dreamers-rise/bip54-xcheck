@@ -86,7 +86,7 @@ jobs:
         with: { name: cases }
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
-      - run: pip install -q "git+https://github.com/btclib-org/btclib.git@${BTCLIB_REF}"
+      - run: pip install -q "git+https://github.com/btclib-org/btclib.git@${BTCLIB_REF}" "ecc==2026.10.30"   # ecc 2026.11.x moved ecc.ecc.ssa; pin the release btclib@BTCLIB_REF was built against
       - run: python3 runners/btclib_run.py cases.json btclib.json
       - uses: actions/upload-artifact@v4
         with: { name: btclib, path: btclib.json }
