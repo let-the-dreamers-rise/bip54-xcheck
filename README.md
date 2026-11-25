@@ -12,6 +12,7 @@ every implementation, then diffs the verdicts.
 |---|---|---|
 | Bitcoin Core | [PR #35793](https://github.com/bitcoin/bitcoin/pull/35793) @ `3f0f142b` | `bitcoind -regtest`, `submitblock` |
 | btcd | [PR #2537](https://github.com/btcsuite/btcd/pull/2537) @ `374cbaf9` | `BlockChain.ProcessBlock` on a fresh chain per case |
+| libbitcoin | `libbitcoin-system` master @ `1c52e5d9` | `chain_state` + header/block `check`, `accept`, `connect`, `confirm` per block, own UTXO set ([runner](runners/libbitcoin/xcheck.cpp)) |
 | btclib | `main` @ `686f6255` (BIP-54 predicates, PR #2830) | `assert_bip54_*` on each case's final transaction |
 
 ## What is tested (53 cases)
@@ -45,6 +46,7 @@ gen/cases.py          the case generator
 gen/oracle.py         spec oracle, checked against bips/bip-0054/test_vectors
 runners/core.py       Bitcoin Core runner (JSON-RPC)
 runners/btcd/         btcd runner (Go test copied into btcd's blockchain package)
+runners/libbitcoin/   libbitcoin-system runner (C++ replay through chain_state)
 runners/btclib_run.py btclib runner
 compare.py            diff vs spec and across implementations -> report/RESULTS.md
 KNOWN.json            divergences that are understood and reported upstream

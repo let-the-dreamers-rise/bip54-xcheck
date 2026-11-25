@@ -1,6 +1,6 @@
 # Findings
 
-Status as of 30 Oct 2026. "Source" means confirmed by reading the pinned code; "CI" means
+Status as of 30 Oct 2026; libbitcoin added 25 Nov 2026. "Source" means confirmed by reading the pinned code; "CI" means
 reproduced by the harness in this repo's workflow.
 
 ## F1. btcd stops enforcing BIP-34 once BIP-54 is active; Core does not (consensus divergence)
@@ -50,6 +50,30 @@ reproduced by the harness in this repo's workflow.
   implementation and running them against another will get different answers. The BIP
   could say "the difficulty adjustment interval (2016 on mainnet)", or Core's functional
   tests could note it.
+
+## L1. libbitcoin agrees with Core on all 53 cases (CI, 25 Nov 2026)
+
+- **Pinned:** libbitcoin-system master @ `1c52e5d9` (24 Nov 2026), which implements BIP-54
+  in `chain::block::check(ctx)`, `chain::transaction::accept(ctx)` and
+  `chain::context::is_early_timestamp` / `is_negative_timespan`.
+- **How it is driven:** [`runners/libbitcoin/xcheck.cpp`](runners/libbitcoin/xcheck.cpp)
+  replays every chain through `chain_state` (one state per header) and runs header
+  `check`/`accept`, block `check`, `check(ctx)`, `populate`, `accept`, `connect` and
+  `confirm` on each block, with its own UTXO set. It is a replay, not libbitcoin-node:
+  database, networking and checkpoints are out of scope.
+- **Result:** every verdict and every rejection index equals Core's, including Core's
+  regtest-only F3 behaviour (libbitcoin's regtest interval is also 144 blocks). Like Core,
+  libbitcoin keeps BIP-34 (`coinbase_height_mismatch` on C07/C08), so btcd is the only
+  implementation that drops it (F1).
+- **Design difference, not a verdict difference:** libbitcoin models BIP-54 as five separate
+  BIP9 deployments (bits 5 to 9, one per rule), while Core uses one deployment. On its own
+  regtest all five are active from genesis. To compare the activation cases (A01–A05) the
+  runner moves all five onto Core's regtest parameters (bit 3, period 144, threshold 108);
+  with that, A01–A05 match Core exactly. If the final activation is a single deployment,
+  libbitcoin's five must be configured to move together; otherwise a network could enforce
+  some BIP-54 rules and not others.
+- **Settings matched to Core regtest:** BIP-34 from height 1 (libbitcoin's regtest default
+  leaves it off), stated in `make_settings()`.
 
 ## Checked and found consistent (source)
 

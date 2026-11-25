@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-IMPLS = ["core", "btcd", "btclib"]
+IMPLS = ["core", "btcd", "libbitcoin", "btclib"]
 # btclib's BIP-54 coinbase predicate does not cover BIP-34 by design.
 OUT_OF_SCOPE = {("btclib", "C07"), ("btclib", "C08")}
 

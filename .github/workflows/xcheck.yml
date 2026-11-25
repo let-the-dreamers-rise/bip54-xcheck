@@ -11,6 +11,7 @@ env:
   # Implementations under test, pinned. Bump deliberately and record in RESULTS.md.
   CORE_REF: 3f0f142b1d0d08a18152d6b100e12d1abf09d58e     # bitcoin/bitcoin PR #35793 (darosior)
   BTCD_REF: 374cbaf9ecef0ebcc0a0fa0bc2f07a03159eed74     # btcsuite/btcd PR #2537 (kcalvinalvin)
+  LIBBITCOIN_REF: 1c52e5d99a4b3b86a7111e2f5d9d52f05c71020b  # libbitcoin/libbitcoin-system master (BIP-54 as five deployments)
   BTCLIB_REF: 686f625565f067011cd6c7b3ff27286b45ad0cc2   # btclib-org/btclib main (BIP54 predicates, PR #2830)
   BIPS_REF: 5aadddb511a5dcfe4599531bd8ae5e5b96d0f793     # bitcoin/bips, for the BIP-54 vectors
 
@@ -77,6 +78,31 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: btcd, path: btcd.json }
 
+  libbitcoin:
+    needs: cases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: cases }
+      - name: Fetch libbitcoin-system
+        run: |
+          git init -q lbs && cd lbs
+          git fetch -q --depth 1 https://github.com/libbitcoin/libbitcoin-system.git "$LIBBITCOIN_REF"
+          git checkout -q FETCH_HEAD
+      - run: pip install -q "cmake>=3.30"
+      - name: Build libbitcoin-system
+        run: |
+          cmake -S lbs/builds/cmake -B lbs-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build lbs-build -j "$(nproc)" --target libbitcoin-system
+      - name: Build the runner
+        run: |
+          g++ -std=gnu++20 -O2 -DNDEBUG -DWITH_SECP256K1 -Ilbs-build/include -Ilbs/include \
+            runners/libbitcoin/xcheck.cpp lbs-build/libbitcoin-system.a -lpthread -o xcheck-lb
+      - run: python3 runners/libbitcoin/run.py ./xcheck-lb cases.json libbitcoin.json
+      - uses: actions/upload-artifact@v4
+        with: { name: libbitcoin, path: libbitcoin.json }
+
   btclib:
     needs: cases
     runs-on: ubuntu-latest
@@ -92,7 +118,7 @@ jobs:
         with: { name: btclib, path: btclib.json }
 
   report:
-    needs: [core, btcd, btclib]
+    needs: [core, btcd, libbitcoin, btclib]
     if: always()
     runs-on: ubuntu-latest
     steps:
